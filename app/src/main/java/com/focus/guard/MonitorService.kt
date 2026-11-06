@@ -4,6 +4,7 @@ import android.app.*
 import android.content.*
 import android.content.pm.ApplicationInfo
 import android.content.pm.ServiceInfo
+import android.net.VpnService
 import android.os.*
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
@@ -31,6 +32,7 @@ class MonitorService : Service() {
 
     private fun check() {
         val s = Store(this); val now = System.currentTimeMillis()
+        if (s.filterOn && !FilterService.running && VpnService.prepare(this) == null) startService(Intent(this, FilterService::class.java))
         if (s.windowStart < Usage.midnight()) s.windowStart = Usage.midnight()
         val (used, cur) = Usage.scan(this, s)
         if (cur == null || cur == packageName) return

@@ -16,6 +16,8 @@ class Store(private val c: Context) {
     var lang: String get() = p.getString("lang", "auto")!!; set(v) = p.edit().putString("lang", v).apply()
     var blockedUntil: Long get() = p.getLong("until", 0); set(v) = p.edit().putLong("until", v).apply()
     var windowStart: Long get() = p.getLong("ws", 0); set(v) = p.edit().putLong("ws", v).apply()
+    var filterOn: Boolean get() = p.getBoolean("fon", true); set(v) = p.edit().putBoolean("fon", v).apply()
+    var offReqAt: Long get() = p.getLong("oreq", 0); set(v) = p.edit().putLong("oreq", v).apply()
     var monitored: Set<String> get() = p.getStringSet("mon", emptySet())!!.toSet(); set(v) = p.edit().putStringSet("mon", v).apply()
 
     fun initDefaults() {

@@ -3,13 +3,14 @@ package com.focus.guard
 import android.Manifest
 import android.content.*
 import android.net.Uri
+import android.net.VpnService
 import android.os.*
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
-import androidx.activity.contract.ActivityResultContracts
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -80,7 +81,13 @@ class BlockActivity : ComponentActivity() {
     val usage = remember(tick) { hasUsage(ctx) }; val over = remember(tick) { Settings.canDrawOverlays(ctx) }
     val bat = remember(tick) { ctx.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(ctx.packageName) }
     val ok = usage && over
-    LaunchedEffect(ok) { if (ok) ContextCompat.startForegroundService(ctx, Intent(ctx, MonitorService::class.java)) }
+    val vpn = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {}
+    LaunchedEffect(ok) {
+        if (ok) {
+            ContextCompat.startForegroundService(ctx, Intent(ctx, MonitorService::class.java))
+            if (s.filterOn) VpnService.prepare(ctx)?.let { vpn.launch(it) }
+        }
+    }
     BackHandler(tab != 0) { tab = 0 }
 
     Themed(langPref) {
@@ -212,6 +219,39 @@ class BlockActivity : ComponentActivity() {
                         Text(n, fontSize = 13.sp, color = if (on) Pr else LC.current.tx)
                     }
                 }
+            }
+        }
+        var taps by remember { mutableIntStateOf(0) }
+        Text("v1.0", fontSize = 12.sp, color = LC.current.mu, modifier = Modifier.align(Alignment.CenterHorizontally).clickable { taps++ }.padding(12.dp))
+        if (taps >= 7) AdvPanel(s)
+    }
+}
+
+@Composable fun AdvPanel(s: Store) {
+    val ctx = LocalContext.current
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var on by remember { mutableStateOf(s.filterOn) }
+    var req by remember { mutableLongStateOf(s.offReqAt) }
+    val wait = 30 * 60_000L; val win = 10 * 60_000L
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = System.currentTimeMillis()
+            if (req != 0L && now > req + wait + win) { req = 0; s.offReqAt = 0 }
+            delay(1000)
+        }
+    }
+    Panel {
+        Title(t("adv")); Sub(t(if (on) "protOn" else "protOff")); Spacer(Modifier.height(10.dp))
+        when {
+            !on -> PrimaryBtn(t("turnOn")) { s.filterOn = true; on = true }
+            req == 0L -> PrimaryBtn(t("reqOff")) { req = now; s.offReqAt = now }
+            now < req + wait -> {
+                Sub("${t("wait")} ${(req + wait - now) / 60000 + 1} ${t("min")}"); Spacer(Modifier.height(10.dp))
+                PrimaryBtn(t("cancel")) { req = 0; s.offReqAt = 0 }
+            }
+            else -> PrimaryBtn(t("confirmOff")) {
+                s.filterOn = false; on = false; req = 0; s.offReqAt = 0
+                ctx.stopService(Intent(ctx, FilterService::class.java))
             }
         }
     }

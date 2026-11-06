@@ -10,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.*
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
@@ -61,6 +62,13 @@ private val T = mapOf(
     "bDescL" to listOf("خذ استراحة. تعود التطبيقات بعد", "Take a break. Apps return in", "Faites une pause. Retour dans"),
     "bTitleN" to listOf("وقت النوم", "Night mode", "Mode nuit"),
     "bDescN" to listOf("التطبيقات متوقفة حتى الساعة", "Apps are off until", "Apps désactivées jusqu’à"),
+    "adv" to listOf("متقدم", "Advanced", "Avancé"),
+    "protOn" to listOf("الحماية مفعّلة.", "Protection is on.", "Protection active."),
+    "protOff" to listOf("الحماية متوقفة.", "Protection is off.", "Protection désactivée."),
+    "reqOff" to listOf("طلب الإيقاف", "Request turn off", "Demander l’arrêt"),
+    "wait" to listOf("انتظر", "Wait", "Attendez"), "cancel" to listOf("إلغاء", "Cancel", "Annuler"),
+    "confirmOff" to listOf("تأكيد الإيقاف", "Confirm turn off", "Confirmer l’arrêt"),
+    "turnOn" to listOf("تفعيل", "Turn on", "Activer"),
     "homeBtn" to listOf("العودة إلى الشاشة الرئيسية", "Go to home screen", "Retour à l’accueil")
 )
 @Composable fun t(k: String): String = T[k]!![when (LL.current) { "ar" -> 0; "fr" -> 2; else -> 1 }]
