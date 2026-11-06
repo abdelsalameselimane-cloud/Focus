@@ -1,16 +1,19 @@
 package com.focus.guard
 
 import android.app.*
+import android.app.admin.DeviceAdminReceiver
 import android.content.*
 import android.content.pm.ApplicationInfo
 import android.content.pm.ServiceInfo
-import android.net.VpnService
 import android.os.*
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import java.util.Calendar
 
 class MonitorService : Service() {
     private val h = Handler(Looper.getMainLooper())
+    private var warned = ""
+    private var lastWidget = 0L
     private val tick = object : Runnable { override fun run() { try { check() } catch (_: Exception) {}; h.postDelayed(this, 2000) } }
 
     override fun onStartCommand(i: Intent?, f: Int, id: Int): Int {
@@ -30,25 +33,68 @@ class MonitorService : Service() {
         packageManager.getApplicationInfo(pkg, 0).flags and ApplicationInfo.FLAG_SYSTEM != 0
     } catch (_: Exception) { false }
 
+    private fun alert(id: Int, title: String, text: String) {
+        val nm = getSystemService(NotificationManager::class.java)
+        nm.createNotificationChannel(NotificationChannel("w", "Focus Guard alerts", NotificationManager.IMPORTANCE_DEFAULT))
+        val pi = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+        nm.notify(id, NotificationCompat.Builder(this, "w").setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+            .setContentTitle(title).setContentText(text).setContentIntent(pi).setAutoCancel(true).build())
+    }
+
+    private fun housekeeping(s: Store, now: Long, lang: String) {
+        if (s.focusNote && s.focusUntil > 0 && now >= s.focusUntil) {
+            s.focusNote = false
+            alert(2, tl(lang, "focusEndT"), tl(lang, "focusEndB"))
+        }
+        if (s.remind && now - s.lastRemind > 7 * DAY) {
+            s.lastRemind = now
+            alert(3, tl(lang, "reportT"), tl(lang, "reportB"))
+        }
+        if (now - lastWidget > 60_000L) { lastWidget = now; refreshWidgets(this) }
+        s.expirePending(now)
+    }
+
     private fun check() {
-        val s = Store(this); val now = System.currentTimeMillis()
-        if (s.filterOn && !FilterService.running && VpnService.prepare(this) == null) startService(Intent(this, FilterService::class.java))
-        if (s.windowStart < Usage.midnight()) s.windowStart = Usage.midnight()
-        val (used, cur) = Usage.scan(this, s)
-        if (cur == null || cur == packageName) return
-        if (s.nightOn && Usage.isNight(s) && !isSystem(cur)) return block("night")
-        if (cur in s.monitored) {
-            if (now < s.blockedUntil) return block("limit")
-            if (used >= s.limit * 60_000L) {
-                s.blockedUntil = now + s.blockMin * 60_000L
-                s.windowStart = s.blockedUntil
-                block("limit")
-            }
+        val s = Store(this); val now = System.currentTimeMillis(); val lang = resolveLang(s.lang)
+        val mid = Usage.midnight()
+        if (s.windowStart < mid) s.windowStart = mid
+        housekeeping(s, now, lang)
+        val sc = Usage.scan(this, s)
+        val cur = sc.cur ?: return
+        if (cur == packageName) return
+
+        if (s.nightOn && Usage.isNight(s) && !isSystem(cur)) return block("night", Usage.nightEnd(s))
+        if (cur !in s.monitored) return
+
+        if (now < s.focusUntil) return block("focus", s.focusUntil)
+        val cal = Calendar.getInstance()
+        val sch = s.schedules.firstOrNull { it.activeAt(cal) }
+        if (sch != null) return block("sched", sch.endsAt(now))
+
+        val lim = s.perLimits[cur] ?: 0
+        val usedApp = sc.per[cur] ?: 0L
+        if (lim > 0 && usedApp >= lim * 60_000L) { s.markBreach(); return block("app", Usage.nextMidnight()) }
+        if (now < s.blockedUntil) return block("limit", s.blockedUntil)
+        if (sc.total >= s.limit * 60_000L) {
+            s.blockedUntil = now + s.blockMin * 60_000L
+            s.windowStart = s.blockedUntil
+            s.markBreach()
+            return block("limit", s.blockedUntil)
+        }
+
+        // Heads-up when about 5 minutes remain (global or this app's own limit)
+        val leftG = s.limit * 60_000L - sc.total
+        val leftA = if (lim > 0) lim * 60_000L - usedApp else Long.MAX_VALUE
+        val left = minOf(leftG, leftA)
+        val key = (if (leftA < leftG) "a$cur" else "g${s.windowStart}") + mid
+        if (left > 0 && left <= 300_000L && warned != key) {
+            warned = key
+            alert(4, tl(lang, "warnT"), tl(lang, "warnB"))
         }
     }
 
-    private fun block(reason: String) {
-        startActivity(Intent(this, BlockActivity::class.java).putExtra("r", reason)
+    private fun block(reason: String, until: Long) {
+        startActivity(Intent(this, BlockActivity::class.java).putExtra("r", reason).putExtra("u", until)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP))
     }
 }
@@ -59,6 +105,9 @@ class BootReceiver : BroadcastReceiver() {
             ContextCompat.startForegroundService(c, Intent(c, MonitorService::class.java))
     }
 }
+
+/** Active device admin makes the system refuse to uninstall the app until it is deactivated. */
+class AdminReceiver : DeviceAdminReceiver()
 
 fun hasUsage(c: Context): Boolean {
     val a = c.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
