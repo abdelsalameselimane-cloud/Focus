@@ -120,16 +120,25 @@ class BlockActivity : ComponentActivity() {
     val pkg = Uri.parse("package:" + ctx.packageName)
     Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Panel { Title(t("setup")); Sub(t("setupD")) }
-        @Composable fun step(ch: String, k: String, on: Boolean, intent: Intent) = Panel {
+        @Composable fun step(ch: String, k: String, on: Boolean, intents: List<Intent>) = Panel {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Tile(ch); Column(Modifier.weight(1f)) { Title(t(k)); Sub(t(k + "D")) }
             }
             Spacer(Modifier.height(14.dp))
-            if (on) Banner(Ok, Icons.Filled.Check, t("done"), "") else PrimaryBtn(t("grant")) { ctx.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            if (on) Banner(Ok, Icons.Filled.Check, t("done"), "") else PrimaryBtn(t("grant")) { openFirst(ctx, intents) }
         }
-        step("1", "pUsage", usage, Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
-        step("2", "pOver", over, Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, pkg))
-        step("3", "pBat", bat, Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkg))
+        step("1", "pUsage", usage, listOf(
+            Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS, pkg),
+            Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS),
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg)))
+        step("2", "pOver", over, listOf(
+            Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, pkg),
+            Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION),
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg)))
+        step("3", "pBat", bat, listOf(
+            Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkg),
+            Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg)))
     }
 }
 
@@ -254,5 +263,11 @@ class BlockActivity : ComponentActivity() {
                 ctx.stopService(Intent(ctx, FilterService::class.java))
             }
         }
+    }
+}
+
+fun openFirst(ctx: Context, intents: List<Intent>) {
+    for (i in intents) {
+        try { ctx.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); return } catch (_: Exception) {}
     }
 }
