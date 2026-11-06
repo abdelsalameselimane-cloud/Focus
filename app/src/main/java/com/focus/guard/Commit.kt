@@ -255,11 +255,11 @@ object Commit {
     PrimaryBtn(t("share")) {
         val body = buildString {
             append("$title\n")
-            if (saved > 0) append("${t("timeSaved")}: ${fmtMin(lang, saved)}\n")
-            append("${t("avg")}: ${total / 7} $minT")
-            if (baseDay > 0) append(" (${t("before")}: $baseDay $minT)")
-            append("\n${t("cleanDays")}: $clean / 7\n${t("focusDone")}: ${s.cFocusN}\n")
-            if (prN > 0) append("${t("prayersKept")}: $prN\n")
+            if (saved > 0) append("${tl(lang, "timeSaved")}: ${fmtMin(lang, saved)}\n")
+            append("${tl(lang, "avg")}: ${total / 7} $minT")
+            if (baseDay > 0) append(" (${tl(lang, "before")}: $baseDay $minT)")
+            append("\n${tl(lang, "cleanDays")}: $clean / 7\n${tl(lang, "focusDone")}: ${s.cFocusN}\n")
+            if (prN > 0) append("${tl(lang, "prayersKept")}: $prN\n")
         }
         ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, body), title)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
