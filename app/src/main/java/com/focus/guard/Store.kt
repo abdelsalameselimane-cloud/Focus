@@ -3,6 +3,7 @@ package com.focus.guard
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
+import android.widget.Toast
 import java.security.MessageDigest
 import java.util.Calendar
 
@@ -56,6 +57,68 @@ class Store(private val c: Context) {
     var remind: Boolean get() = p.getBoolean("rem", false); set(v) = p.edit().putBoolean("rem", v).apply()
     var lastRemind: Long get() = p.getLong("lrem", 0); set(v) = p.edit().putLong("lrem", v).apply()
 
+    /** What the block screen shows: all | quran | hadith | story | off. Not a restriction, so never locked. */
+    var inspire: String get() = p.getString("insp", "all")!!; set(v) = p.edit().putString("insp", v).apply()
+
+    // ---- Prayer mode ----
+    var prayerOn: Boolean get() = p.getBoolean("pr", false); set(v) = p.edit().putBoolean("pr", v).apply()
+    var lat: Double get() = p.getString("plat", null)?.toDoubleOrNull() ?: 36.7538; set(v) = p.edit().putString("plat", v.toString()).apply()
+    var lng: Double get() = p.getString("plng", null)?.toDoubleOrNull() ?: 3.0588; set(v) = p.edit().putString("plng", v.toString()).apply()
+    /** Index into Prayer.CITIES, or -1 when the position came from the device. Default: Algiers. */
+    var pCity: Int get() = p.getInt("pcity", 0); set(v) = p.edit().putInt("pcity", v).apply()
+    var pMethod: Int get() = p.getInt("pmeth", 0); set(v) = p.edit().putInt("pmeth", v.coerceIn(0, PrayerCalc.METHODS.size - 1)).apply()
+    var pOffset: Int get() = p.getInt("poff", 0); set(v) = p.edit().putInt("poff", v.coerceIn(-15, 15)).apply()
+    var lastPrayerNote: String get() = p.getString("lpn", "")!!; set(v) = p.edit().putString("lpn", v).apply()
+
+    // ---- Weekly commitment (7 days, settings can only get stricter) ----
+    var cStart: Long get() = p.getLong("cs", 0); set(v) = p.edit().putLong("cs", v).apply()
+    var cEnd: Long get() = p.getLong("ce", 0); set(v) = p.edit().putLong("ce", v).apply()
+    /** Average daily monitored usage (ms) in the days before the commitment began. */
+    var cBase: Long get() = p.getLong("cb", 0); set(v) = p.edit().putLong("cb", v).apply()
+    var cMon: Set<String> get() = p.getStringSet("cmon", emptySet())!!.toSet(); set(v) = p.edit().putStringSet("cmon", v).apply()
+    var cPrayer: Boolean get() = p.getBoolean("cpr", false); set(v) = p.edit().putBoolean("cpr", v).apply()
+    var cSnap: Long get() = p.getLong("csnap", 0); set(v) = p.edit().putLong("csnap", v).apply()
+    var cDone: Boolean get() = p.getBoolean("cdone", false); set(v) = p.edit().putBoolean("cdone", v).apply()
+    var cBroken: Boolean get() = p.getBoolean("cbk", false); set(v) = p.edit().putBoolean("cbk", v).apply()
+    var cTries: Int get() = p.getInt("ctr", 0); set(v) = p.edit().putInt("ctr", v).apply()
+    var cFocusMin: Int get() = p.getInt("cfm", 0); set(v) = p.edit().putInt("cfm", v).apply()
+    var cFocusN: Int get() = p.getInt("cfn", 0); set(v) = p.edit().putInt("cfn", v).apply()
+    var weeksDone: Int get() = p.getInt("wd", 0); set(v) = p.edit().putInt("wd", v).apply()
+    var cDays: List<Long>
+        get() = (p.getString("cd", "") ?: "").split(",").mapNotNull { it.toLongOrNull() }
+        set(v) = p.edit().putString("cd", v.joinToString(",")).apply()
+    var cTop: List<Pair<String, Long>>
+        get() = (p.getString("ct", "") ?: "").split(";").mapNotNull {
+            val a = it.split("=")
+            if (a.size == 2) a[1].toLongOrNull()?.let { m -> a[0] to m } else null
+        }
+        set(v) = p.edit().putString("ct", v.joinToString(";") { "${it.first}=${it.second}" }).apply()
+
+    fun locked(now: Long = System.currentTimeMillis()) = cStart > 0 && now < cEnd
+    fun ended(now: Long = System.currentTimeMillis()) = cStart > 0 && now >= cEnd
+
+    fun startCommit(baseMs: Long) {
+        val now = System.currentTimeMillis()
+        p.edit().putLong("cs", now).putLong("ce", now + 7 * DAY).putLong("cb", baseMs)
+            .putStringSet("cmon", monitored).putBoolean("cpr", prayerOn).putLong("csnap", 0)
+            .putBoolean("cdone", false).putBoolean("cbk", false).putInt("ctr", 0).putInt("cfm", 0).putInt("cfn", 0)
+            .putString("cd", "").putString("ct", "").putStringSet("cbr", emptySet()).apply()
+        pending = emptyList()   // nothing queued before the lock may slip through during it
+    }
+
+    /** Forget the finished commitment (the report is gone); completed weeks stay counted. */
+    fun clearCommit() {
+        p.edit().remove("cs").remove("ce").remove("cb").remove("cmon").remove("cpr").remove("csnap").remove("cdone")
+            .remove("cbk").remove("ctr").remove("cfm").remove("cfn").remove("cd").remove("ct").remove("cbr").apply()
+    }
+
+    fun lockToast() = Toast.makeText(c, tl(resolveLang(lang), "lockedToast"), Toast.LENGTH_SHORT).show()
+
+    fun startFocus(min: Int) {
+        focusUntil = System.currentTimeMillis() + min * 60_000L; focusNote = true
+        if (locked()) { cFocusN += 1; cFocusMin += min }
+    }
+
     /** Per-app daily limits in minutes (pkg -> minutes). Missing = no limit. */
     var perLimits: Map<String, Int>
         get() = (p.getString("pl", "") ?: "").split(";").mapNotNull {
@@ -90,7 +153,14 @@ class Store(private val c: Context) {
         val key = Usage.midnight().toString()
         val set = p.getStringSet("br", emptySet())!!
         if (key !in set) p.edit().putStringSet("br", set + key).apply()
+        if (locked()) {
+            val day = ((System.currentTimeMillis() - cStart) / DAY).toString()
+            val cb = p.getStringSet("cbr", emptySet())!!
+            if (day !in cb) p.edit().putStringSet("cbr", cb + day).apply()
+        }
     }
+    /** Distinct commitment days (0..6) on which a limit was breached. */
+    fun commitBreachDays(): Int = p.getStringSet("cbr", emptySet())!!.size
     fun streak(): Int {
         val br = p.getStringSet("br", emptySet())!!
         val first = p.getLong("first", Usage.midnight())
@@ -112,6 +182,7 @@ class Store(private val c: Context) {
         "app" -> value != "1" && arg in monitored
         "plimit" -> eff(value.toInt()) > eff(perLimits[arg] ?: 0)
         "sched" -> true
+        "prayer" -> value != "1" && prayerOn
         else -> false
     }
 
@@ -124,16 +195,24 @@ class Store(private val c: Context) {
             "app" -> monitored = if (value == "1") monitored + arg else monitored - arg
             "plimit" -> perLimits = if (value.toInt() == 0) perLimits - arg else perLimits + (arg to value.toInt())
             "sched" -> schedules = schedules.filter { it.id != arg }
+            "prayer" -> prayerOn = value == "1"
         }
     }
 
     /** Tightening changes apply at once; loosening ones are queued behind a 30 minute wait. */
     fun request(kind: String, arg: String, value: String) {
         val rest = pending.filterNot { it.kind == kind && it.arg == arg }
-        if (isLoosening(kind, arg, value)) pending = rest + Pend(kind, arg, value, System.currentTimeMillis() + DELAY_MS)
+        val loosen = isLoosening(kind, arg, value)
+        if (loosen && locked()) {   // weekly commitment: loosening is refused outright, not delayed
+            pending = rest; cTries += 1; lockToast(); return
+        }
+        if (loosen) pending = rest + Pend(kind, arg, value, System.currentTimeMillis() + DELAY_MS)
         else { pending = rest; applyChange(kind, arg, value) }
     }
-    fun applyPending(x: Pend) { applyChange(x.kind, x.arg, x.value); dropPending(x) }
+    fun applyPending(x: Pend) {
+        if (locked() && isLoosening(x.kind, x.arg, x.value)) { dropPending(x); lockToast(); return }
+        applyChange(x.kind, x.arg, x.value); dropPending(x)
+    }
     fun dropPending(x: Pend) { pending = pending.filterNot { it.kind == x.kind && it.arg == x.arg } }
     fun expirePending(now: Long) {
         val all = pending
@@ -210,6 +289,22 @@ object Usage {
             }
         }
         return Scan(total, per, cur)
+    }
+
+    /** Usage of [mon] in [n] consecutive 24h buckets starting at [start]; later events are clipped. */
+    fun buckets(c: Context, mon: Set<String>, start: Long, n: Int): Week {
+        val bounds = LongArray(n + 1) { start + it * DAY }
+        val days = LongArray(n)
+        val per = HashMap<String, Long>()
+        walk(c, start) { pkg, a, b ->
+            if (pkg in mon) {
+                for (i in 0 until n) {
+                    val ov = minOf(b, bounds[i + 1]) - maxOf(a, bounds[i])
+                    if (ov > 0) { days[i] += ov; per[pkg] = (per[pkg] ?: 0L) + ov }
+                }
+            }
+        }
+        return Week(days.toList(), per.entries.sortedByDescending { it.value }.map { it.key to it.value }, start)
     }
 
     /** Monitored usage for the last 7 days (oldest first, today last) and per-app totals. */

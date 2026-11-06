@@ -50,6 +50,15 @@ class MonitorService : Service() {
             s.lastRemind = now
             alert(3, tl(lang, "reportT"), tl(lang, "reportB"))
         }
+        if (s.prayerOn) Prayer.active(s, now)?.let {
+            val id = "${it.key}${it.at}"
+            if (s.lastPrayerNote != id) {
+                s.lastPrayerNote = id
+                alert(6, "${tl(lang, "prayerNow")} ${tl(lang, "p_" + it.key)}", tl(lang, "prayerAlertB"))
+            }
+        }
+        if (Commit.tick(this, s, now))
+            alert(5, tl(lang, "commitRepT"), tl(lang, "timeSaved") + ": " + (Commit.saved(s) / 60_000L).let { m -> if (m > 0) fmtMin(lang, m) else "—" })
         if (now - lastWidget > 60_000L) { lastWidget = now; refreshWidgets(this) }
         s.expirePending(now)
     }
@@ -63,6 +72,10 @@ class MonitorService : Service() {
         val cur = sc.cur ?: return
         if (cur == packageName) return
 
+        if (s.prayerOn && !isSystem(cur)) {
+            val pr = Prayer.active(s, now)
+            if (pr != null) return block("prayer", pr.end, pr.key)
+        }
         if (s.nightOn && Usage.isNight(s) && !isSystem(cur)) return block("night", Usage.nightEnd(s))
         if (cur !in s.monitored) return
 
@@ -93,8 +106,8 @@ class MonitorService : Service() {
         }
     }
 
-    private fun block(reason: String, until: Long) {
-        startActivity(Intent(this, BlockActivity::class.java).putExtra("r", reason).putExtra("u", until)
+    private fun block(reason: String, until: Long, name: String = "") {
+        startActivity(Intent(this, BlockActivity::class.java).putExtra("r", reason).putExtra("u", until).putExtra("n", name)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP))
     }
 }
@@ -107,7 +120,17 @@ class BootReceiver : BroadcastReceiver() {
 }
 
 /** Active device admin makes the system refuse to uninstall the app until it is deactivated. */
-class AdminReceiver : DeviceAdminReceiver()
+class AdminReceiver : DeviceAdminReceiver() {
+    /** While a weekly commitment is running, warn that switching this protection off will be recorded. */
+    override fun onDisableRequested(context: Context, intent: Intent): CharSequence? {
+        val s = Store(context)
+        return if (s.locked()) tl(resolveLang(s.lang), "adminWarn") else null
+    }
+    override fun onDisabled(context: Context, intent: Intent) {
+        val s = Store(context)
+        if (s.locked()) s.cBroken = true
+    }
+}
 
 fun hasUsage(c: Context): Boolean {
     val a = c.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager

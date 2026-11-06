@@ -6,6 +6,7 @@ import android.content.*
 import android.net.Uri
 import android.os.*
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -51,10 +52,12 @@ class MainActivity : ComponentActivity() {
 class BlockActivity : ComponentActivity() {
     private var reason by mutableStateOf("limit")
     private var until by mutableLongStateOf(0L)
+    private var prayerKey by mutableStateOf("")
 
     private fun read(i: Intent?) {
         reason = i?.getStringExtra("r") ?: "limit"
         until = i?.getLongExtra("u", 0L) ?: 0L
+        prayerKey = i?.getStringExtra("n") ?: ""
     }
 
     override fun onCreate(b: Bundle?) {
@@ -64,23 +67,29 @@ class BlockActivity : ComponentActivity() {
             Themed(s.lang) {
                 var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
                 LaunchedEffect(Unit) { while (true) { delay(1000); now = System.currentTimeMillis() } }
-                val soft = reason == "night" || reason == "sched" || reason == "focus"
+                val soft = reason == "night" || reason == "sched" || reason == "focus" || reason == "prayer"
                 val title = when (reason) {
                     "night" -> "bTitleN"; "app" -> "bTitleA"; "sched" -> "bTitleS"; "focus" -> "bTitleF"; else -> "bTitleL"
                 }
+                val heading = if (reason == "prayer") "${t("prayerNow")} ${t("p_$prayerKey")}" else t(title)
                 val left = (until - now).coerceAtLeast(0L) / 1000
                 val endAt = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(until))
                 Column(Modifier.fillMaxSize().systemBarsPadding().widthIn(max = 520.dp).verticalScroll(rememberScrollState()).padding(20.dp),
                     verticalArrangement = Arrangement.Center) {
                     Panel {
-                        Banner(if (soft) Pr else Er, Icons.Filled.Lock, t(title), if (until > 0) "${t("bUntil")} $endAt" else "")
+                        Banner(if (soft) Pr else Er, Icons.Filled.Lock, heading, if (until > 0) "${t("bUntil")} $endAt" else "")
                         if (until > 0) {
                             Spacer(Modifier.height(16.dp))
                             Text(String.format("%d:%02d:%02d", left / 3600, left % 3600 / 60, left % 60), fontSize = 34.sp,
                                 fontWeight = FontWeight.ExtraBold, color = LC.current.tx, modifier = Modifier.align(Alignment.CenterHorizontally))
                         }
-                        Spacer(Modifier.height(16.dp)); Sub(t("q${pick % 3 + 1}"))
-                        Spacer(Modifier.height(10.dp)); Sub("${t("bTip")}: ${t("a${pick % 5 + 1}")}")
+                        Spacer(Modifier.height(16.dp))
+                        if (reason == "prayer") Sub(t("prayerMsg"))
+                        else if (s.inspire == Inspire.OFF) {
+                            Sub(t("q${pick % 3 + 1}"))
+                            Spacer(Modifier.height(10.dp)); Sub("${t("bTip")}: ${t("a${pick % 5 + 1}")}")
+                        }
+                        InspireCard(s.inspire)
                         Spacer(Modifier.height(20.dp)); PrimaryBtn(t("homeBtn")) { goHome() }
                     }
                 }
@@ -135,15 +144,16 @@ class BlockActivity : ComponentActivity() {
                         0 -> HomeTab(s, tick)
                         1 -> StatsTab(s)
                         2 -> AppsTab(s)
+                        3 -> CommitTab(s, tick)
                         else -> SettingsTab(s, langPref, tick) { langPref = it; s.lang = it }
                     }
                 }
             }
             if (ok && !locked) Row(Modifier.fillMaxWidth().background(c.card).padding(vertical = 6.dp)) {
-                listOf(Icons.Filled.Home to "home", Icons.Filled.Info to "stats", Icons.Filled.List to "apps", Icons.Filled.Settings to "settings").forEachIndexed { i, (ic, k) ->
+                listOf(Icons.Filled.Home to "home", Icons.Filled.Info to "stats", Icons.Filled.List to "apps", Icons.Filled.DateRange to "commit", Icons.Filled.Settings to "settings").forEachIndexed { i, (ic, k) ->
                     Column(Modifier.weight(1f).heightIn(min = 48.dp).clickable { tab = i }, horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(ic, null, tint = if (tab == i) Pr else c.mu)
-                        Text(t(k), fontSize = 12.sp, color = if (tab == i) Pr else c.mu)
+                        Text(t(k), fontSize = 11.sp, maxLines = 1, color = if (tab == i) Pr else c.mu)
                     }
                 }
             }
@@ -203,21 +213,25 @@ class BlockActivity : ComponentActivity() {
     val night = s.nightOn && Usage.isNight(s); val paused = now < s.blockedUntil
     val focus = now < s.focusUntil
     val sch = s.schedules.firstOrNull { it.activeAt(Calendar.getInstance()) }
+    val pr = if (s.prayerOn) Prayer.active(s, now) else null
     var fm by remember { mutableIntStateOf(25) }
     Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         when {
+            pr != null -> Banner(Pr, Icons.Filled.Lock, "${t("prayerNow")} ${t("p_" + pr.key)}", "${t("bUntil")} ${SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(pr.end))}")
             night -> Banner(Pr, Icons.Filled.Lock, t("nightNow"), "${t("bDescN")} ${String.format("%02d:00", s.nightEnd)}")
             focus -> Banner(Pr, Icons.Filled.Lock, t("focusNow"), "${t("left")} ${(s.focusUntil - now) / 60000 + 1} ${t("min")}")
             sch != null -> Banner(Pr, Icons.Filled.Lock, t("scheduleNow"), "${t("bUntil")} ${SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(sch.endsAt(now)))}")
             paused -> Banner(Er, Icons.Filled.Warning, t("paused"), "${t("backIn")} ${(s.blockedUntil - now) / 60000 + 1} ${t("min")}")
             else -> Banner(Ok, Icons.Filled.Check, t("running"), "")
         }
+        if (s.locked(now)) Banner(Pr, Icons.Filled.DateRange, t("commitOn"), "${t("left")} ${(s.cEnd - now) / DAY} ${t("days")} ${(s.cEnd - now) % DAY / 3_600_000L} ${t("hr")}")
         Panel {
             Title(t("used")); Spacer(Modifier.height(6.dp))
             Text("$used / ${s.limit} ${t("min")}", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = LC.current.tx)
             Spacer(Modifier.height(10.dp))
             LinearProgressIndicator(progress = { (used.toFloat() / s.limit).coerceIn(0f, 1f) }, Modifier.fillMaxWidth().height(8.dp), color = Pr, trackColor = Pr.copy(.12f))
         }
+        if (s.prayerOn) NextPrayerCard(s)
         Panel {
             Title(t("streak")); Spacer(Modifier.height(6.dp))
             Text("${s.streak()} ${t("days")}", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = Ok)
@@ -231,7 +245,7 @@ class BlockActivity : ComponentActivity() {
                 }
                 Spacer(Modifier.height(12.dp))
                 PrimaryBtn(t("start")) {
-                    s.focusUntil = System.currentTimeMillis() + fm * 60_000L; s.focusNote = true; Ver.n++
+                    s.startFocus(fm); Ver.n++
                 }
             }
         }
@@ -320,6 +334,7 @@ val LIMITS = listOf(0, 15, 30, 45, 60, 90, 120, 180)
         list.isEmpty() -> Panel { Title(t("empty")) }
         else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item { Sub(t("appsD")) }
+            if (s.locked()) item { Banner(Pr, Icons.Filled.Lock, t("commitOn"), t("rulesNote")) }
             items(list, key = { it.first }) { (pkg, label) -> AppRow(s, pkg, label) }
         }
     }
@@ -373,6 +388,7 @@ val LIMITS = listOf(0, 15, 30, 45, 60, 90, 120, 180)
     val locked = Usage.isNight(s) && s.nightOn
     val now = System.currentTimeMillis()
     Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        if (s.locked(now)) Banner(Pr, Icons.Filled.Lock, t("commitOn"), t("rulesNote"))
         PendingPanel(ctx, s, now)
         Panel {
             Title(t("limit")); Sub(t("limitD")); Spacer(Modifier.height(10.dp))
@@ -392,6 +408,14 @@ val LIMITS = listOf(0, 15, 30, 45, 60, 90, 120, 180)
                 SettingStepper(s, "nend", s.nightEnd, 1, 12, 1, !locked) { String.format("%02d:00", it) }
             }
         }
+        Panel {
+            Title(t("inspire")); Sub(t("inspireD")); Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(Inspire.ALL to "iAll", Inspire.QURAN to "iQuran", Inspire.HADITH to "iHadith", Inspire.STORY to "iStory", Inspire.OFF to "iOff")
+                    .forEach { (m, k) -> Chip(t(k), s.inspire == m, Modifier.weight(1f), 12) { s.inspire = m; Ver.n++ } }
+            }
+        }
+        PrayerPanel(s)
         SchedPanel(s)
         Panel {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -409,7 +433,7 @@ val LIMITS = listOf(0, 15, 30, 45, 60, 90, 120, 180)
                 }
             }
         }
-        Text("v2.0", fontSize = 12.sp, color = LC.current.mu, modifier = Modifier.align(Alignment.CenterHorizontally).padding(12.dp))
+        Text("v2.2", fontSize = 12.sp, color = LC.current.mu, modifier = Modifier.align(Alignment.CenterHorizontally).padding(12.dp))
     }
 }
 
@@ -420,6 +444,7 @@ val LIMITS = listOf(0, 15, 30, 45, 60, 90, 120, 180)
     "nend" -> "${t("nightEnd")} ${String.format("%02d:00", p.value.toInt())}"
     "app" -> "${appLabel(ctx, p.arg)}: ${t("off")}"
     "plimit" -> "${appLabel(ctx, p.arg)}: ${limText(p.value.toInt())}"
+    "prayer" -> "${t("prayer")}: ${t("off")}"
     "sched" -> "${t("sched")}: " + (s.schedules.firstOrNull { it.id == p.arg }?.let { hhmm(it.start) + "–" + hhmm(it.end) } ?: "")
     else -> p.kind
 }
@@ -494,6 +519,7 @@ fun dayShort(lang: String, i: Int): String {
     var txt by remember { mutableStateOf("") }
     var err by remember { mutableStateOf(false) }
     val has = s.hasPin()
+    val ctx = LocalContext.current; val t2 = t("lockedPin")
     Panel {
         Title(t("pin")); Sub(t("pinD")); Spacer(Modifier.height(10.dp))
         OutlinedTextField(txt, { if (it.length <= 8 && it.all { ch -> ch.isDigit() }) txt = it; err = false },
@@ -505,7 +531,8 @@ fun dayShort(lang: String, i: Int): String {
         if (!has) PrimaryBtn(t("pinSet")) {
             if (txt.length >= 4) { s.setPin(txt); Sess.unlocked = true; txt = ""; Ver.n++ } else err = true
         } else PrimaryBtn(t("pinRemove")) {
-            if (s.checkPin(txt)) { s.clearPin(); txt = ""; Ver.n++ } else err = true
+            if (s.locked()) Toast.makeText(ctx, t2, Toast.LENGTH_SHORT).show()
+            else if (s.checkPin(txt)) { s.clearPin(); txt = ""; Ver.n++ } else err = true
         }
     }
 }
