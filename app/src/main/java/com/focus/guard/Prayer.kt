@@ -79,7 +79,11 @@ private fun fmtClock(ms: Long) = SimpleDateFormat("HH:mm", Locale.getDefault()).
 
 /** "1 h 20 min" / "35 min" */
 fun fmtMin(lang: String, m: Long): String =
-    if (m >= 60) "${m / 60} ${tl(lang, "hr")} ${m % 60} ${tl(lang, "min")}" else "$m ${tl(lang, "min")}"
+    if (m >= 60) (if (m % 60 == 0L) "${m / 60} ${tl(lang, "hr")}" else "${m / 60} ${tl(lang, "hr")} ${m % 60} ${tl(lang, "min")}")
+    else "$m ${tl(lang, "min")}"
+
+/** Compact form for chart labels: "45" or "1:05". */
+fun fmtShort(m: Long): String = if (m >= 60) "${m / 60}:${String.format("%02d", m % 60)}" else "$m"
 
 /** Home card: next prayer and how long until its pause. */
 @Composable fun NextPrayerCard(s: Store) {

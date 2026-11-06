@@ -18,12 +18,21 @@ object QuranIndex {
         return n + ayah
     }
 
-    /** Uplifting verses, as (surah, verse): reassurance, hope, gratitude, remembrance, dua. */
+    /**
+     * Uplifting passages as (surah, from, to). Each one is complete in meaning on its own: whole short surahs,
+     * or a few connected verses, never a verse whose sense depends on a story or an event around it.
+     */
     val PICKS = listOf(
-        2 to 255, 2 to 286, 2 to 152, 2 to 186, 2 to 153, 2 to 216, 3 to 139, 3 to 173, 3 to 200, 3 to 8, 6 to 162,
-        7 to 156, 8 to 2, 9 to 40, 10 to 57, 11 to 115, 12 to 87, 13 to 28, 14 to 7, 16 to 97, 17 to 80, 18 to 10,
-        20 to 25, 20 to 46, 21 to 87, 24 to 22, 25 to 74, 29 to 69, 30 to 21, 33 to 41, 39 to 10, 39 to 53, 40 to 60,
-        41 to 34, 49 to 13, 51 to 56, 55 to 13, 59 to 22, 64 to 11, 65 to 2, 65 to 3, 67 to 2, 93 to 3, 94 to 5, 94 to 6, 112 to 1
+        Triple(1, 1, 7), Triple(2, 153, 157), Triple(2, 186, 186), Triple(2, 255, 255), Triple(2, 285, 286),
+        Triple(3, 8, 9), Triple(3, 139, 140), Triple(3, 173, 174), Triple(3, 190, 194), Triple(3, 200, 200),
+        Triple(6, 162, 163), Triple(7, 156, 156), Triple(8, 2, 4), Triple(10, 57, 58), Triple(11, 115, 115),
+        Triple(13, 28, 29), Triple(14, 7, 7), Triple(16, 90, 90), Triple(16, 97, 97), Triple(17, 23, 24),
+        Triple(18, 107, 110), Triple(20, 25, 32), Triple(21, 87, 88), Triple(24, 35, 35), Triple(25, 63, 67),
+        Triple(25, 74, 74), Triple(29, 69, 69), Triple(30, 21, 21), Triple(31, 13, 19), Triple(33, 41, 43),
+        Triple(39, 10, 10), Triple(39, 53, 55), Triple(40, 60, 60), Triple(41, 30, 35), Triple(49, 10, 13),
+        Triple(51, 56, 58), Triple(55, 1, 13), Triple(59, 22, 24), Triple(64, 11, 11), Triple(65, 2, 3),
+        Triple(67, 1, 3), Triple(93, 1, 11), Triple(94, 1, 8), Triple(103, 1, 3), Triple(108, 1, 3),
+        Triple(110, 1, 3), Triple(112, 1, 4), Triple(113, 1, 5), Triple(114, 1, 6)
     )
 
     /** Beautiful, general-purpose hadiths: numbers inside "ara-nawawi" (Forty Hadith of an-Nawawi). */

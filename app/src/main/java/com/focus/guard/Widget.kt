@@ -21,7 +21,7 @@ fun refreshWidgets(c: Context) {
         val used = if (hasUsage(c)) Usage.scan(c, s).total else 0L
         val left = ((s.limit * 60_000L - used) / 60_000L).coerceAtLeast(0L)
         val rv = RemoteViews(c.packageName, R.layout.widget)
-        rv.setTextViewText(R.id.w_time, "$left ${tl(lang, "min")}")
+        rv.setTextViewText(R.id.w_time, fmtMin(lang, left))
         rv.setTextViewText(R.id.w_sub, tl(lang, "wLeft"))
         rv.setTextViewText(R.id.w_streak, "${s.streak()} ${tl(lang, "days")} ✓")
         rv.setOnClickPendingIntent(R.id.w_root, PendingIntent.getActivity(c, 0, Intent(c, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE))

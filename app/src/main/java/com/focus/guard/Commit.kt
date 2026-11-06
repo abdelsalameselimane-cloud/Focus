@@ -118,8 +118,8 @@ object Commit {
     if (s.weeksDone > 0) Banner(Ok, Icons.Filled.Star, t("weeksDone"), "${s.weeksDone}")
     Panel {
         Title(t("willLock")); Spacer(Modifier.height(6.dp))
-        KV(t("limit"), "${s.limit} ${t("min")}")
-        KV(t("blockFor"), "${s.blockMin} ${t("min")}")
+        KV(t("limit"), fmtMin(lang, s.limit.toLong()))
+        KV(t("blockFor"), fmtMin(lang, s.blockMin.toLong()))
         KV(t("night"), if (s.nightOn) "${t("on")} · ${String.format("%02d:00", s.nightEnd)}" else t("off"))
         KV(t("monApps"), "${s.monitored.size}")
         KV(t("sched"), "${s.schedules.size}")
@@ -165,8 +165,8 @@ object Commit {
     }
     Panel {
         Title(t("willLock")); Spacer(Modifier.height(6.dp))
-        KV(t("limit"), "${s.limit} ${t("min")}")
-        KV(t("blockFor"), "${s.blockMin} ${t("min")}")
+        KV(t("limit"), fmtMin(lang, s.limit.toLong()))
+        KV(t("blockFor"), fmtMin(lang, s.blockMin.toLong()))
         KV(t("night"), if (s.nightOn) "${t("on")} · ${String.format("%02d:00", s.nightEnd)}" else t("off"))
         KV(t("monApps"), "${s.monitored.size}")
         KV(t("sched"), "${s.schedules.size}")
@@ -209,7 +209,7 @@ object Commit {
     }
     Panel { Sub(t(tier)) }
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        StatBox(Modifier.weight(1f), t("avg"), "${total / 7} ${t("min")}", if (baseDay > 0) "${t("before")}: $baseDay ${t("min")}" else "")
+        StatBox(Modifier.weight(1f), t("avg"), fmtMin(lang, total / 7), if (baseDay > 0) "${t("before")}: ${fmtMin(lang, baseDay)}" else "")
         StatBox(Modifier.weight(1f), t("cleanDays"), "$clean / 7")
     }
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -217,7 +217,7 @@ object Commit {
         StatBox(Modifier.weight(1f), t("prayersKept"), "$prN", if (prMin > 0) fmtMin(lang, prMin.toLong()) else "")
     }
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        StatBox(Modifier.weight(1f), t("bestDay"), "${mins[bestIdx]} ${t("min")}", labels[bestIdx])
+        StatBox(Modifier.weight(1f), t("bestDay"), fmtMin(lang, mins[bestIdx]), labels[bestIdx])
         StatBox(Modifier.weight(1f), t("change"), if (pct != null) "${if (pct > 0) "+" else ""}$pct%" else "—")
     }
     Panel {
@@ -226,7 +226,7 @@ object Commit {
         Row(Modifier.fillMaxWidth().height(150.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
             mins.forEachIndexed { i, m ->
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Bottom) {
-                    Text("$m", fontSize = 10.sp, color = LC.current.mu)
+                    Text(fmtShort(m), fontSize = 10.sp, color = LC.current.mu)
                     Box(Modifier.fillMaxWidth().height((100f * m / max).coerceAtLeast(3f).dp)
                         .background(if (i == bestIdx) Ok else Pr.copy(.55f), RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp)))
                     Text(labels[i], fontSize = 10.sp, maxLines = 1, color = LC.current.mu)
@@ -245,7 +245,7 @@ object Commit {
         top.forEach { (pkg, ms) ->
             Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(appLabel(ctx, pkg), color = LC.current.tx, modifier = Modifier.weight(1f), maxLines = 1)
-                Text("${ms / 60_000L} ${t("min")}", color = Pr, fontWeight = FontWeight.ExtraBold)
+                Text(fmtMin(lang, ms / 60_000L), color = Pr, fontWeight = FontWeight.ExtraBold)
             }
         }
     }
@@ -256,8 +256,8 @@ object Commit {
         val body = buildString {
             append("$title\n")
             if (saved > 0) append("${tl(lang, "timeSaved")}: ${fmtMin(lang, saved)}\n")
-            append("${tl(lang, "avg")}: ${total / 7} $minT")
-            if (baseDay > 0) append(" (${tl(lang, "before")}: $baseDay $minT)")
+            append("${tl(lang, "avg")}: ${fmtMin(lang, total / 7)}")
+            if (baseDay > 0) append(" (${tl(lang, "before")}: ${fmtMin(lang, baseDay)})")
             append("\n${tl(lang, "cleanDays")}: $clean / 7\n${tl(lang, "focusDone")}: ${s.cFocusN}\n")
             if (prN > 0) append("${tl(lang, "prayersKept")}: $prN\n")
         }

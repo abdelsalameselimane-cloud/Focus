@@ -219,15 +219,15 @@ class BlockActivity : ComponentActivity() {
         when {
             pr != null -> Banner(Pr, Icons.Filled.Lock, "${t("prayerNow")} ${t("p_" + pr.key)}", "${t("bUntil")} ${SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(pr.end))}")
             night -> Banner(Pr, Icons.Filled.Lock, t("nightNow"), "${t("bDescN")} ${String.format("%02d:00", s.nightEnd)}")
-            focus -> Banner(Pr, Icons.Filled.Lock, t("focusNow"), "${t("left")} ${(s.focusUntil - now) / 60000 + 1} ${t("min")}")
+            focus -> Banner(Pr, Icons.Filled.Lock, t("focusNow"), "${t("left")} ${fmtMin(LL.current, (s.focusUntil - now) / 60000 + 1)}")
             sch != null -> Banner(Pr, Icons.Filled.Lock, t("scheduleNow"), "${t("bUntil")} ${SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(sch.endsAt(now)))}")
-            paused -> Banner(Er, Icons.Filled.Warning, t("paused"), "${t("backIn")} ${(s.blockedUntil - now) / 60000 + 1} ${t("min")}")
+            paused -> Banner(Er, Icons.Filled.Warning, t("paused"), "${t("backIn")} ${fmtMin(LL.current, (s.blockedUntil - now) / 60000 + 1)}")
             else -> Banner(Ok, Icons.Filled.Check, t("running"), "")
         }
         if (s.locked(now)) Banner(Pr, Icons.Filled.DateRange, t("commitOn"), "${t("left")} ${(s.cEnd - now) / DAY} ${t("days")} ${(s.cEnd - now) % DAY / 3_600_000L} ${t("hr")}")
         Panel {
             Title(t("used")); Spacer(Modifier.height(6.dp))
-            Text("$used / ${s.limit} ${t("min")}", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = LC.current.tx)
+            Text("${fmtMin(LL.current, used)} / ${fmtMin(LL.current, s.limit.toLong())}", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = LC.current.tx)
             Spacer(Modifier.height(10.dp))
             LinearProgressIndicator(progress = { (used.toFloat() / s.limit).coerceIn(0f, 1f) }, Modifier.fillMaxWidth().height(8.dp), color = Pr, trackColor = Pr.copy(.12f))
         }
@@ -238,10 +238,10 @@ class BlockActivity : ComponentActivity() {
         }
         Panel {
             Title(t("focus")); Sub(t("focusD")); Spacer(Modifier.height(12.dp))
-            if (focus) Banner(Pr, Icons.Filled.Lock, t("focusNow"), "${t("left")} ${(s.focusUntil - now) / 60000 + 1} ${t("min")}")
+            if (focus) Banner(Pr, Icons.Filled.Lock, t("focusNow"), "${t("left")} ${fmtMin(LL.current, (s.focusUntil - now) / 60000 + 1)}")
             else {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    listOf(15, 25, 45, 60).forEach { m -> Chip("$m ${t("min")}", fm == m, Modifier.weight(1f)) { fm = m } }
+                    listOf(15, 25, 45, 60).forEach { m -> Chip(fmtMin(LL.current, m.toLong()), fm == m, Modifier.weight(1f)) { fm = m } }
                 }
                 Spacer(Modifier.height(12.dp))
                 PrimaryBtn(t("start")) {
@@ -277,14 +277,14 @@ fun hhmm(m: Int) = String.format("%02d:%02d", m / 60, m % 60)
             Row(Modifier.fillMaxWidth().height(150.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
                 mins.forEachIndexed { i, m ->
                     Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Bottom) {
-                        Text("$m", fontSize = 10.sp, color = LC.current.mu)
+                        Text(fmtShort(m), fontSize = 10.sp, color = LC.current.mu)
                         Box(Modifier.fillMaxWidth().height((100f * m / max).coerceAtLeast(3f).dp).background(if (i == 6) Pr else Pr.copy(.45f), RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp)))
                         Text(labels[i], fontSize = 10.sp, maxLines = 1, color = LC.current.mu)
                     }
                 }
             }
             Spacer(Modifier.height(12.dp))
-            Sub("${t("total")}: $total ${t("min")}  ·  ${t("avg")}: ${total / 7} ${t("min")}")
+            Sub("${t("total")}: ${fmtMin(lang, total)}  ·  ${t("avg")}: ${fmtMin(lang, total / 7)}")
         }
         Panel {
             Title(t("topApps")); Spacer(Modifier.height(8.dp))
@@ -292,7 +292,7 @@ fun hhmm(m: Int) = String.format("%02d:%02d", m / 60, m % 60)
             w.top.take(6).forEach { (pkg, ms) ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(appLabel(ctx, pkg), color = LC.current.tx, modifier = Modifier.weight(1f), maxLines = 1)
-                    Text("${ms / 60000} ${t("min")}", color = Pr, fontWeight = FontWeight.ExtraBold)
+                    Text(fmtMin(lang, ms / 60000), color = Pr, fontWeight = FontWeight.ExtraBold)
                 }
             }
         }
@@ -301,9 +301,9 @@ fun hhmm(m: Int) = String.format("%02d:%02d", m / 60, m % 60)
             val df = SimpleDateFormat("EEE dd/MM", Locale(lang)); val c2 = Calendar.getInstance()
             val body = buildString {
                 append("$title\n")
-                mins.forEachIndexed { i, m -> c2.timeInMillis = w.startMs; c2.add(Calendar.DAY_OF_YEAR, i); append("${df.format(c2.time)}: $m $minTxt\n") }
-                append("$totalTxt: $total $minTxt · $avgTxt: ${total / 7} $minTxt\n$streakTxt: ${s.streak()} $daysTxt\n")
-                w.top.take(5).forEach { (pkg, ms) -> append("• ${appLabel(ctx, pkg)}: ${ms / 60000} $minTxt\n") }
+                mins.forEachIndexed { i, m -> c2.timeInMillis = w.startMs; c2.add(Calendar.DAY_OF_YEAR, i); append("${df.format(c2.time)}: ${fmtMin(lang, m)}\n") }
+                append("$totalTxt: ${fmtMin(lang, total)} · $avgTxt: ${fmtMin(lang, total / 7)}\n$streakTxt: ${s.streak()} $daysTxt\n")
+                w.top.take(5).forEach { (pkg, ms) -> append("• ${appLabel(ctx, pkg)}: ${fmtMin(lang, ms / 60000)}\n") }
             }
             val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, body)
             ctx.startActivity(Intent.createChooser(send, title).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -314,7 +314,7 @@ fun hhmm(m: Int) = String.format("%02d:%02d", m / 60, m % 60)
 // ---------------------------------------------------------------- Apps
 
 val LIMITS = listOf(0, 15, 30, 45, 60, 90, 120, 180)
-@Composable fun limText(m: Int) = if (m == 0) t("noLimit") else "$m ${t("min")}"
+@Composable fun limText(m: Int) = if (m == 0) t("noLimit") else fmtMin(LL.current, m.toLong())
 
 @Composable fun AppsTab(s: Store) {
     val ctx = LocalContext.current
@@ -392,11 +392,11 @@ val LIMITS = listOf(0, 15, 30, 45, 60, 90, 120, 180)
         PendingPanel(ctx, s, now)
         Panel {
             Title(t("limit")); Sub(t("limitD")); Spacer(Modifier.height(10.dp))
-            SettingStepper(s, "limit", s.limit, 15, 90, 5) { "$it ${t("min")}" }
+            SettingStepper(s, "limit", s.limit, 15, 90, 5) { fmtMin(LL.current, it.toLong()) }
         }
         Panel {
             Title(t("blockFor")); Sub(t("blockForD")); Spacer(Modifier.height(10.dp))
-            SettingStepper(s, "block", s.blockMin, 15, 180, 15) { "$it ${t("min")}" }
+            SettingStepper(s, "block", s.blockMin, 15, 180, 15) { fmtMin(LL.current, it.toLong()) }
         }
         Panel {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -433,13 +433,13 @@ val LIMITS = listOf(0, 15, 30, 45, 60, 90, 120, 180)
                 }
             }
         }
-        Text("v2.2", fontSize = 12.sp, color = LC.current.mu, modifier = Modifier.align(Alignment.CenterHorizontally).padding(12.dp))
+        Text("v2.3", fontSize = 12.sp, color = LC.current.mu, modifier = Modifier.align(Alignment.CenterHorizontally).padding(12.dp))
     }
 }
 
 @Composable fun pendLabel(ctx: Context, s: Store, p: Pend): String = when (p.kind) {
-    "limit" -> "${t("limit")}: ${p.value} ${t("min")}"
-    "block" -> "${t("blockFor")}: ${p.value} ${t("min")}"
+    "limit" -> "${t("limit")}: ${fmtMin(LL.current, p.value.toLong())}"
+    "block" -> "${t("blockFor")}: ${fmtMin(LL.current, p.value.toLong())}"
     "night" -> "${t("night")}: ${t("off")}"
     "nend" -> "${t("nightEnd")} ${String.format("%02d:00", p.value.toInt())}"
     "app" -> "${appLabel(ctx, p.arg)}: ${t("off")}"

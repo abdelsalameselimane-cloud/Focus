@@ -79,11 +79,18 @@ object Inspire {
         var done = false
         when (k) {
             Inspire.QURAN -> {
-                val (s, a) = QuranIndex.PICKS.random()
-                Inspire.ayah(QuranIndex.global(s, a))?.let {
-                    kind = Inspire.QURAN; source = "${it.surah} · ${it.inSurah}"; lastSurah = it.surah
-                    parts.clear(); parts.add("${it.text} ${Inspire.ayahMark(it.inSurah)}")
-                    qNext = it.number + 1; more = qNext <= QuranIndex.TOTAL; done = true
+                val (s, from, to) = QuranIndex.PICKS.random()
+                val got = ArrayList<Inspire.Ayah>()
+                for (n in QuranIndex.global(s, from)..QuranIndex.global(s, to)) {
+                    val a = Inspire.ayah(n) ?: break
+                    got.add(a)
+                }
+                if (got.isNotEmpty()) {
+                    val first = got.first(); val last = got.last()
+                    kind = Inspire.QURAN; lastSurah = first.surah
+                    source = "${first.surah} · ${first.inSurah}" + if (last.inSurah != first.inSurah) "–${last.inSurah}" else ""
+                    parts.clear(); parts.add(got.joinToString(" ") { "${it.text} ${Inspire.ayahMark(it.inSurah)}" })
+                    qNext = last.number + 1; more = qNext <= QuranIndex.TOTAL; done = true
                 }
             }
             Inspire.HADITH -> {
